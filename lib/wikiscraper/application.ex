@@ -6,7 +6,6 @@ defmodule Wikiscraper.Application do
       {Task.Supervisor, name: Wikiscraper.TaskSupervisor, strategy: :one_for_one},
 
     ]
-    IO.inspect("STARTING WITH APPLICATION")
 
     opts = [strategy: :one_for_one, name: Wikiscraper.Supervisor]
     Supervisor.start_link(children, opts)

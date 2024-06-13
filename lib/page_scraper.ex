@@ -16,14 +16,14 @@ defmodule PageScraper do
     GenServer.cast(__MODULE__, {:run})
   end
 
-  def handle_call({:run}, _from, %__MODULE__{file_path: file_path} = state) do
+  def handle_cast({:run}, %__MODULE__{file_path: file_path} = state) do
     File.stream!(file_path)
     |> Enum.map(&String.trim/1)
     |> Stream.chunk_every(100)
     |> Stream.each(&process_links/1)
     |> Stream.run()
 
-    {:reply, {:ok, "Scraping completed"}, state}
+    {:noreply,  state}
   end
 
   defp process_links(links) do
@@ -72,7 +72,7 @@ defmodule PageScraper do
   end
 
   defp append_to_file(url) do
-    File.write("temp/links processed.txt", url <> "\n", [:append])
+    File.write("temp/links_processed.txt", url <> "\n", [:append])
   end
 
 end
