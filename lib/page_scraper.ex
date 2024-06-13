@@ -9,12 +9,11 @@ defmodule PageScraper do
   end
 
   def init(%{file_path: file_path}) do
-
     {:ok, %__MODULE__{file_path: file_path}}
   end
 
   def run do
-    GenServer.call(__MODULE__, {:run})
+    GenServer.call(__MODULE__, {:run},70000)
   end
 
   def handle_call({:run}, _from, %__MODULE__{file_path: file_path} = state) do
@@ -28,11 +27,10 @@ defmodule PageScraper do
   end
 
   defp process_links(links) do
-      Enum.map(links, fn link ->
-        Task.async(fn -> scrape(link) end)
-      end)
-
-      |> Enum.map(&Task.await(&1, 60000))
+    Enum.map(links, fn link ->
+      Task.async(fn -> scrape(link) end)
+    end)
+    |> Enum.map(&Task.await(&1, 60000))
   end
 
   defp scrape(url) do
@@ -42,11 +40,14 @@ defmodule PageScraper do
       {:ok, response} ->
         {:ok, html} = Floki.parse_document(response.body)
         body_content = extract_body_content(html)
+        keyword = get_keyword(url)
+        file_path = "temp/processed/#{keyword}.txt"
 
         Task.start(fn ->
-          write_to_file("temp/processed/#{get_keyword(url)}.txt", body_content)
+          write_to_file(file_path, body_content)
           append_to_file(url)
         end)
+
 
         {:ok, body_content}
 
@@ -73,4 +74,5 @@ defmodule PageScraper do
   defp append_to_file(url) do
     File.write("temp/links processed.txt", url <> "\n", [:append])
   end
+
 end
