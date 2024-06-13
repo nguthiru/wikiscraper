@@ -1,45 +1,38 @@
 defmodule PageScraper do
   use GenServer
   require Logger
-  defstruct [:url, :links]
-  @wiki_base_url "https://sw.wikipedia.org/wiki/"
+  defstruct [:file_path, :links]
 
-  def start_link(keyword) do
-    GenServer.start_link(__MODULE__, %{keyword: keyword}, name: String.to_atom(keyword))
+  def start_link(file_path \\ "temp/links.txt") do
+    # file path is the path to the links.txt
+    GenServer.start_link(__MODULE__, %{file_path: file_path}, name: __MODULE__)
   end
 
-  def init(%{keyword: keyword}) do
-    {:ok, %__MODULE__{links: MapSet.new(), url: @wiki_base_url <> keyword}}
+  def init(%{file_path: file_path}) do
+
+    {:ok, %__MODULE__{file_path: file_path}}
   end
 
-  def view_state(keyword) do
-    GenServer.call(String.to_atom(keyword), {:view_state})
+  def run do
+    GenServer.call(__MODULE__, {:run})
   end
 
-  def scrape_page(keyword) do
-    GenServer.call(String.to_atom(keyword), {:scrape},15000)
+  def handle_call({:run}, _from, %__MODULE__{file_path: file_path} = state) do
+    File.stream!(file_path)
+    |> Enum.map(&String.trim/1)
+    |> Stream.chunk_every(100)
+    |> Stream.each(&process_links/1)
+    |> Stream.run()
+
+    {:reply, {:ok, "Scraping completed"}, state}
   end
 
-  def stop(keyword) do
-    GenServer.stop(String.to_atom(keyword))
-  end
+  defp process_links(links) do
+      Enum.map(links, fn link ->
+        Task.async(fn -> scrape(link) end)
+      end)
 
-  def handle_call({:view_state}, _from, state) do
-    {:reply, {:ok, state}, state}
-  end
-
-  def handle_call({:scrape}, _from, state) do
-    case scrape(state.url) do
-      {:ok, %{links: links, body_content: body_content}} ->
-        state = %{state | links: MapSet.put(state.links, links)}
-        # dump_to_file(state.url, body_content)
-
-        {:reply, {:ok, links}, state}
-
-      {:error, :failed} ->
-        IO.inspect("Failed to scrape")
-        {:reply, {:error, :failed}, state}
-    end
+      |> Enum.map(&Task.await(&1, 60000))
   end
 
   defp scrape(url) do
@@ -48,45 +41,36 @@ defmodule PageScraper do
     case HTTPoison.get(url) do
       {:ok, response} ->
         {:ok, html} = Floki.parse_document(response.body)
-        links = extract_links(html)
-        links_formatted = Enum.map(links, fn x -> @wiki_base_url <> x end)
-        add_links_to_file(links_formatted)
-        # body_content = extract_body_content(html)
-        {:ok, %{links: links, body_content: ""}}
+        body_content = extract_body_content(html)
 
-      {:error, _item}->
-        IO.inspect("We have failed")
+        Task.start(fn ->
+          write_to_file("temp/processed/#{get_keyword(url)}.txt", body_content)
+          append_to_file(url)
+        end)
+
+        {:ok, body_content}
+
+      {:error, _item} ->
         {:error, :failed}
     end
   end
 
-  defp extract_body_content(html) do
-    Logger.debug("Extracting body content")
-    Floki.find(html, "#bodyContent") |> Floki.text()
+  defp extract_body_content(document) do
+    Floki.find(document, "#mw-content-text")
+    |> Floki.text()
   end
 
-  defp extract_links(html) do
-    Logger.debug("Extracting links")
-
-    Floki.find(html, "#bodyContent a")
-    |> Enum.map(fn x -> Floki.attribute(x, "href") end)
-    |> Enum.flat_map(fn x -> x end)
-    |> Enum.filter(fn x ->
-      String.starts_with?(x, "/wiki/") &&
-        !String.starts_with?(x, "/wiki/Faili:")
-    end)
-    |> Enum.map(fn x -> String.replace_prefix(x, "/wiki/", "") end)
+  defp get_keyword(url) do
+    url
+    |> String.split("/")
+    |> Enum.at(-1)
   end
 
-  defp dump_to_file(url, body_content) do
-
-    case File.write("temp/#{URI.parse(url).path |> Path.basename()}.txt", body_content) do
-      :ok -> Logger.debug("Dumping to file")
-      {:error, reason} -> Logger.error("Failed to dump to file: #{reason}")
-    end
+  defp write_to_file(file_path, content) do
+    File.write(file_path, content, [:write])
   end
 
-  defp add_links_to_file(links) do
-    File.write("temp/links.txt", Enum.join(links, "\n"), [:append])
+  defp append_to_file(url) do
+    File.write("temp/links processed.txt", url <> "\n", [:append])
   end
 end

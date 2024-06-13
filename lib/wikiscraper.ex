@@ -76,12 +76,12 @@ defmodule Wikiscraper do
       Logger.warning("#{keyword} is already scraped")
       {:ok, state.urls, state}
     else
-      case PageScraper.start_link(keyword) do
+      case LinkScraper.start_link(keyword) do
         {:ok, _pid} ->
           # remove keyword from urls
           state = %{state | urls: List.delete(state.urls, keyword)}
 
-          case PageScraper.scrape_page(keyword) do
+          case LinkScraper.scrape_page(keyword) do
             {:ok, links} ->
               state = %{
                 state
@@ -89,12 +89,12 @@ defmodule Wikiscraper do
                   urls: Enum.concat(state.urls, links |> Enum.uniq())
               }
 
-              PageScraper.stop(keyword)
+              LinkScraper.stop(keyword)
 
               {:ok, links, state}
 
             {:error, :failed} ->
-              PageScraper.stop(keyword)
+              LinkScraper.stop(keyword)
 
               Logger.error("Failed to scrape")
               {:error, :failed, state}
