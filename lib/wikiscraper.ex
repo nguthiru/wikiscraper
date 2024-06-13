@@ -10,7 +10,7 @@ defmodule Wikiscraper do
 
   defstruct [:urls, :unique_urls]
 
-  def start_link(keyword \\ "Kiswahili") do
+  def start_link(keyword \\ "Virusi") do
     GenServer.start_link(__MODULE__, %{keyword: keyword}, name: __MODULE__)
   end
 
@@ -54,8 +54,10 @@ defmodule Wikiscraper do
 
                 recursive_scrape(Enum.at(urls, 1), state)
 
-              _ ->
+              {:error, :failed, state} ->
                 Logger.error("Failed to scrape")
+                recursive_scrape(Enum.at(state.urls, 2), state)
+
                 {:error, :failed, state}
             end
           end)
@@ -92,6 +94,8 @@ defmodule Wikiscraper do
               {:ok, links, state}
 
             {:error, :failed} ->
+              PageScraper.stop(keyword)
+
               Logger.error("Failed to scrape")
               {:error, :failed, state}
           end
