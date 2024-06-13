@@ -13,7 +13,7 @@ defmodule PageScraper do
   end
 
   def run do
-    GenServer.call(__MODULE__, {:run},70000)
+    GenServer.cast(__MODULE__, {:run})
   end
 
   def handle_call({:run}, _from, %__MODULE__{file_path: file_path} = state) do
