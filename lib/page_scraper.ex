@@ -17,37 +17,38 @@ defmodule PageScraper do
   end
 
   def handle_cast({:run}, %__MODULE__{file_path: file_path} = state) do
-    urls = File.stream!(file_path)
-    |> Enum.map(&String.trim/1)
-    |> MapSet.new()
+    links =
+      File.stream!(file_path)
+      |> Enum.map(&String.trim/1)
 
-    scrape(urls)
-
+    links
+    |> Enum.chunk_every(1000)
+    |> Enum.each(fn x -> Task.start(fn -> scrape(MapSet.new(x)) end) end)
 
     {:noreply, state}
-
   end
 
-  def scrape(%MapSet{}=urls) do
+  def scrape(%MapSet{} = urls) do
     case MapSet.size(urls) do
       0 ->
         Logger.debug("No more links to scrape")
         {:noreply, %__MODULE__{}}
+
       _ ->
         url = urls |> MapSet.to_list() |> List.first()
-        Logger.debug("Scraping on #{url} started")
+
         case get_document(url) do
           {:ok, html} ->
             body_content = extract_body_content(html)
             write_to_file("temp/processed/#{get_keyword(url)}.txt", body_content)
             append_to_file(url)
-            {:error, :failed} ->
-              Logger.error("Failed to scrape")
-            end
+
+          {:error, :failed} ->
+            Logger.error("Failed to scrape")
+        end
+
         scrape(MapSet.delete(urls, url))
     end
-
-
   end
 
   defp get_document(url) do
@@ -63,7 +64,6 @@ defmodule PageScraper do
         {:error, :failed}
     end
   end
-
 
   defp extract_body_content(document) do
     Floki.find(document, "#mw-content-text")
@@ -81,7 +81,6 @@ defmodule PageScraper do
   end
 
   defp append_to_file(url) do
-    File.write("temp/processed/links_processed.txt", url <> "\n", [:append])
+    File.write("temp/links_processed.txt", url <> "\n", [:append])
   end
-
 end
