@@ -17,44 +17,53 @@ defmodule PageScraper do
   end
 
   def handle_cast({:run}, %__MODULE__{file_path: file_path} = state) do
-    File.stream!(file_path)
+    urls = File.stream!(file_path)
     |> Enum.map(&String.trim/1)
-    |> Stream.chunk_every(100)
-    |> Stream.each(&process_links/1)
-    |> Stream.run()
+    |> MapSet.new()
 
-    {:noreply,  state}
+    scrape(urls)
+
+
+    {:noreply, state}
+
   end
 
-  defp process_links(links) do
-    Enum.map(links, fn link ->
-      Task.async(fn -> scrape(link) end)
-    end)
-    |> Enum.map(&Task.await(&1, 60000))
+  def scrape(%MapSet{}=urls) do
+    case MapSet.size(urls) do
+      0 ->
+        Logger.debug("No more links to scrape")
+        {:noreply, %__MODULE__{}}
+      _ ->
+        url = urls |> MapSet.to_list() |> List.first()
+        Logger.debug("Scraping on #{url} started")
+        case get_document(url) do
+          {:ok, html} ->
+            body_content = extract_body_content(html)
+            write_to_file("temp/processed/#{get_keyword(url)}.txt", body_content)
+            append_to_file(url)
+            {:error, :failed} ->
+              Logger.error("Failed to scrape")
+            end
+        scrape(MapSet.delete(urls, url))
+    end
+
+
   end
 
-  defp scrape(url) do
-    Logger.debug("Scraping started on #{url}")
+  defp get_document(url) do
+    Logger.debug("Scraping on #{url} started")
 
     case HTTPoison.get(url) do
-      {:ok, response} ->
-        {:ok, html} = Floki.parse_document(response.body)
-        body_content = extract_body_content(html)
-        keyword = get_keyword(url)
-        file_path = "temp/processed/#{keyword}.txt"
+      {:ok, %HTTPoison.Response{status_code: _status_code, body: body}} ->
+        Floki.parse_document(body)
 
-        Task.start(fn ->
-          write_to_file(file_path, body_content)
-          append_to_file(url)
-        end)
-
-
-        {:ok, body_content}
-
-      {:error, _item} ->
+      {:error, error} ->
+        IO.inspect(error)
+        Logger.error("Failed to scrape")
         {:error, :failed}
     end
   end
+
 
   defp extract_body_content(document) do
     Floki.find(document, "#mw-content-text")
@@ -72,7 +81,7 @@ defmodule PageScraper do
   end
 
   defp append_to_file(url) do
-    File.write("temp/links_processed.txt", url <> "\n", [:append])
+    File.write("temp/processed/links_processed.txt", url <> "\n", [:append])
   end
 
 end

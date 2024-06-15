@@ -17,7 +17,7 @@ defmodule LinkScraper do
   end
 
   def scrape_page(keyword) do
-    GenServer.call(String.to_atom(keyword), {:scrape},15000)
+    GenServer.call(String.to_atom(keyword), {:scrape}, 15000)
   end
 
   def stop(keyword) do
@@ -54,13 +54,11 @@ defmodule LinkScraper do
         # body_content = extract_body_content(html)
         {:ok, %{links: links, body_content: ""}}
 
-      {:error, _item}->
+      {:error, _item} ->
         IO.inspect("We have failed")
         {:error, :failed}
     end
   end
-
-
 
   defp extract_links(html) do
     Logger.debug("Extracting links")
@@ -70,11 +68,10 @@ defmodule LinkScraper do
     |> Enum.flat_map(fn x -> x end)
     |> Enum.filter(fn x ->
       String.starts_with?(x, "/wiki/") &&
-        !String.starts_with?(x, "/wiki/Faili:")
+        !String.contains?(x, ":")
     end)
     |> Enum.map(fn x -> String.replace_prefix(x, "/wiki/", "") end)
   end
-
 
   defp add_links_to_file(links) do
     File.write("temp/links.txt", Enum.join(links, "\n"), [:append])
