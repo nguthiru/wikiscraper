@@ -23,7 +23,8 @@ defmodule PageScraper do
 
     links
     |> Enum.chunk_every(1000)
-    |> Enum.each(fn x -> Task.start(fn -> scrape(MapSet.new(x)) end) end)
+    |> Enum.map(fn x -> Task.async(fn -> scrape(MapSet.new(x)) end) end)
+    |> Enum.each(fn x -> Task.await(x,:infinity) end)
 
     {:noreply, state}
   end
@@ -31,10 +32,11 @@ defmodule PageScraper do
   def scrape(%MapSet{} = urls) do
     case MapSet.size(urls) do
       0 ->
-        Logger.debug("No more links to scrape")
+        Logger.warning("No more links to scrape")
         {:noreply, %__MODULE__{}}
 
       _ ->
+        Logger.debug("Remaining with #{MapSet.size(urls) |> inspect()} elements")
         url = urls |> MapSet.to_list() |> List.first()
 
         case get_document(url) do
@@ -77,6 +79,7 @@ defmodule PageScraper do
   end
 
   defp write_to_file(file_path, content) do
+    Logger.debug("Writing to file: #{file_path} - file content length: #{String.length(content)}")
     File.write(file_path, content, [:write])
   end
 
