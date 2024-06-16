@@ -32,7 +32,7 @@ defmodule TaifaLeo.PageScraper do
           |> Enum.map(&String.trim/1)
           |> MapSet.new()
 
-        Logger.debug("Processed links found: #{MapSet.size(processed_links)}")
+        Logger.warning("Processed links found: #{MapSet.size(processed_links)} Filtering out the links")
 
         MapSet.difference(MapSet.new(links), processed_links) |> MapSet.to_list()
       else
