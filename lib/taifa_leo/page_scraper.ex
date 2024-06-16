@@ -42,7 +42,7 @@ defmodule TaifaLeo.PageScraper do
 
       _ ->
         Logger.debug("Remaining with #{MapSet.size(urls) |> inspect()} elements")
-        url = urls |> MapSet.to_list() |> List.first()
+        url = urls |> MapSet.to_list() |>Enum.shuffle() |> List.first()
 
         case get_document(url) do
           {:ok, html} ->
@@ -53,7 +53,7 @@ defmodule TaifaLeo.PageScraper do
           {:error, :failed} ->
             Logger.error("Failed to scrape")
         end
-
+        Process.sleep(2000)
         scrape(MapSet.delete(urls, url), state)
     end
   end
