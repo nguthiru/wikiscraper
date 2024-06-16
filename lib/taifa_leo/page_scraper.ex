@@ -32,7 +32,9 @@ defmodule TaifaLeo.PageScraper do
           |> Enum.map(&String.trim/1)
           |> MapSet.new()
 
-        Logger.warning("Processed links found: #{MapSet.size(processed_links)} Filtering out the links")
+        Logger.warning(
+          "Processed links found: #{MapSet.size(processed_links)} Filtering out the links"
+        )
 
         MapSet.difference(MapSet.new(links), processed_links) |> MapSet.to_list()
       else
@@ -76,7 +78,7 @@ defmodule TaifaLeo.PageScraper do
   defp get_document(url) do
     Logger.debug("Scraping on #{url} started")
 
-    case HTTPoison.get(url) do
+    case HTTPoison.get(url, [], follow_redirect: true, timeout: 50_000, recv_timeout: 50_000) do
       {:ok, %HTTPoison.Response{status_code: _status_code, body: body}} ->
         Floki.parse_document(body)
 
