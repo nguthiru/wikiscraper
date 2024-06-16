@@ -1,9 +1,10 @@
-defmodule PageScraper do
+defmodule TaifaLeo.PageScraper do
+
   use GenServer
   require Logger
   defstruct [:file_path, :links, :output_dir]
 
-  def start_link(file_path \\ "temp/links.txt", output_dir \\ "") do
+  def start_link(file_path \\ "temp/links_taifa.txt", output_dir \\ "taifa") do
     # file path is the path to the links.txt
     GenServer.start_link(__MODULE__, %__MODULE__{file_path: file_path, output_dir: output_dir},
       name: __MODULE__
@@ -23,6 +24,7 @@ defmodule PageScraper do
     links =
       File.stream!(file_path)
       |> Enum.map(&String.trim/1)
+      |> Enum.shuffle()
 
     links
     |> Enum.chunk_every(1000)
@@ -71,8 +73,9 @@ defmodule PageScraper do
   end
 
   defp extract_body_content(document) do
-    Floki.find(document, "#mw-content-text")
-    |> Floki.text()
+    Floki.find(document, ".news-details-layout1 p,h2")
+    |> Enum.map(&Floki.text/1)
+    |> Enum.join("\n")
   end
 
   defp get_keyword(url) do
