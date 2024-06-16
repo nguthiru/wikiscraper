@@ -1,5 +1,4 @@
 defmodule TaifaLeo.PageScraper do
-
   use GenServer
   require Logger
   defstruct [:file_path, :links, :output_dir]
@@ -20,11 +19,26 @@ defmodule TaifaLeo.PageScraper do
     GenServer.cast(__MODULE__, {:run})
   end
 
-  def handle_cast({:run}, %__MODULE__{file_path: file_path} = state) do
+  def handle_cast({:run}, %__MODULE__{file_path: file_path, output_dir: output_dir} = state) do
     links =
       File.stream!(file_path)
       |> Enum.map(&String.trim/1)
       |> Enum.shuffle()
+
+    links =
+      if File.exists?("temp/links_#{output_dir}_processed.txt") do
+        processed_links =
+          File.stream!("temp/links_#{output_dir}_processed.txt")
+          |> Enum.map(&String.trim/1)
+          |> MapSet.new()
+
+        Logger.debug("Processed links found: #{MapSet.size(processed_links)}")
+
+        MapSet.difference(MapSet.new(links), processed_links) |> MapSet.to_list()
+      else
+        Logger.debug("No processed links found")
+        links
+      end
 
     links
     |> Enum.chunk_every(1000)
@@ -42,7 +56,7 @@ defmodule TaifaLeo.PageScraper do
 
       _ ->
         Logger.debug("Remaining with #{MapSet.size(urls) |> inspect()} elements")
-        url = urls |> MapSet.to_list() |>Enum.shuffle() |> List.first()
+        url = urls |> MapSet.to_list() |> Enum.shuffle() |> List.first()
 
         case get_document(url) do
           {:ok, html} ->
@@ -53,6 +67,7 @@ defmodule TaifaLeo.PageScraper do
           {:error, :failed} ->
             Logger.error("Failed to scrape")
         end
+
         Process.sleep(2000)
         scrape(MapSet.delete(urls, url), state)
     end
