@@ -39,7 +39,11 @@ defmodule Taifascraper do
   def fetch_from_url(url, page \\ 1) do
     formatted_url = get_url(url, page)
 
-    case HTTPoison.get(formatted_url, [], follow_redirect: true) do
+    case HTTPoison.get(formatted_url, [],
+           follow_redirect: true,
+           timeout: 50_000,
+           recv_timeout: 50_000
+         ) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         Logger.info("Scraping #{url}")
         links = body |> Floki.parse_document() |> scrape_body()
@@ -66,7 +70,7 @@ defmodule Taifascraper do
     |> Floki.find(".col-lg-8 .col-xl-12 a")
     |> Enum.map(&Floki.attribute(&1, "href"))
     |> Enum.flat_map(fn x -> x end)
-    |> Enum.filter(&!String.starts_with?(&1, "T L"))
+    |> Enum.filter(&(!String.starts_with?(&1, "T L")))
     |> Enum.uniq()
   end
 

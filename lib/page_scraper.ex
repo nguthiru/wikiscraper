@@ -3,7 +3,7 @@ defmodule PageScraper do
   require Logger
   defstruct [:file_path, :links, :output_dir]
 
-  def start_link(file_path \\ "temp/links.txt", output_dir \\ "") do
+  def start_link(file_path \\ "temp/links.txt", output_dir \\ "wiki") do
     # file path is the path to the links.txt
     GenServer.start_link(__MODULE__, %__MODULE__{file_path: file_path, output_dir: output_dir},
       name: __MODULE__
@@ -19,10 +19,28 @@ defmodule PageScraper do
     GenServer.cast(__MODULE__, {:run})
   end
 
-  def handle_cast({:run}, %__MODULE__{file_path: file_path} = state) do
+  def handle_cast({:run}, %__MODULE__{file_path: file_path, output_dir: output_dir} = state) do
     links =
       File.stream!(file_path)
       |> Enum.map(&String.trim/1)
+      |> Enum.shuffle()
+
+    links =
+      if File.exists?("temp/links_#{output_dir}_processed.txt") do
+        processed_links =
+          File.stream!("temp/links_#{output_dir}_processed.txt")
+          |> Enum.map(&String.trim/1)
+          |> MapSet.new()
+
+        Logger.warning(
+          "Processed links found: #{MapSet.size(processed_links)} Filtering out the links"
+        )
+
+        MapSet.difference(MapSet.new(links), processed_links) |> MapSet.to_list()
+      else
+        Logger.debug("No processed links found")
+        links
+      end
 
     links
     |> Enum.chunk_every(1000)
@@ -59,7 +77,11 @@ defmodule PageScraper do
   defp get_document(url) do
     Logger.debug("Scraping on #{url} started")
 
-    case HTTPoison.get(url) do
+    case HTTPoison.get(url, [],
+           follow_redirect: true,
+           timeout: 50_000,
+           recv_timeout: 50_000
+         ) do
       {:ok, %HTTPoison.Response{status_code: _status_code, body: body}} ->
         Floki.parse_document(body)
 
@@ -71,8 +93,9 @@ defmodule PageScraper do
   end
 
   defp extract_body_content(document) do
-    Floki.find(document, "#mw-content-text")
-    |> Floki.text()
+    Floki.find(document, ".mw-parser-output p,h2,h3,h4")
+    |> Enum.map(&Floki.text/1)
+    |> Enum.join("\n")
   end
 
   defp get_keyword(url) do
